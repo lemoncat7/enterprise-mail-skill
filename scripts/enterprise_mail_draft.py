@@ -175,6 +175,7 @@ def send_from_draft(subject_hint=None):
         return False
     
     recipients = config.get("to", [])
+    cc_recipients = config.get("cc", [])
     
     USER = config["auth"]["user"]
     AUTH_CODE = config["auth"]["password"]
@@ -210,22 +211,28 @@ def send_from_draft(subject_hint=None):
         msg = email.message_from_bytes(raw_email)
         
         subject = msg['Subject']
-        # 提取邮件正文
-        body = ""
-        if msg.is_multipart():
-            for part in msg.walk():
-                if part.get_content_type() == "text/plain":
-                    body = part.get_payload(decode=True).decode('utf-8')
-                    break
-        else:
-            body = msg.get_payload(decode=True).decode('utf-8')
         
         print(f"找到草稿: {subject}")
-        print(f"内容预览: {body[:100]}...")
         
-        # 用 SMTP 发送
+        # 直接用 smtplib 发送原始邮件（保留 HTML 格式）
         print("\n通过 SMTP 发送...")
-        success = send_email(subject, body, recipients)
+        import smtplib
+        from smtplib import SMTP_SSL
+        
+        smtp_host = config["smtp"]["host"]
+        smtp_port = config["smtp"]["port"]
+        smtp_user = config["auth"]["user"]
+        smtp_password = config["auth"]["password"]
+        
+        all_recipients = list(recipients)
+        all_recipients.extend(cc_recipients)
+        
+        with SMTP_SSL(smtp_host, smtp_port) as server:
+            server.login(smtp_user, smtp_password)
+            server.sendmail(config["from"], all_recipients, raw_email)
+        
+        success = True
+        print(f"✅ Email sent! To: {', '.join(all_recipients)}")
         
         if success:
             # 删除草稿箱里的这封
