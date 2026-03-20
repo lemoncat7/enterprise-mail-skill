@@ -39,7 +39,7 @@ def load_config():
     
     return config
 
-def save_draft(subject, content, recipients=None):
+def save_draft(subject, content, recipients=None, cc_recipients=None):
     """保存邮件到草稿箱 via IMAP"""
     config = load_config()
     if not config:
@@ -47,6 +47,8 @@ def save_draft(subject, content, recipients=None):
     
     if not recipients:
         recipients = config.get("to", [])
+    if not cc_recipients:
+        cc_recipients = config.get("cc", [])
     
     # IMAP 配置
     IMAP_HOST = "imap.exmail.qq.com"
@@ -71,6 +73,8 @@ def save_draft(subject, content, recipients=None):
         msg = MIMEText(content, 'plain', 'utf-8')
         msg['From'] = config["from"]
         msg['To'] = ", ".join(recipients)
+        if cc_recipients:
+            msg['Cc'] = ", ".join(cc_recipients)
         msg['Subject'] = Header(subject, 'utf-8')
         
         # 保存草稿
@@ -91,7 +95,7 @@ def save_draft(subject, content, recipients=None):
         print(f"❌ 草稿保存失败: {e}")
         return False
 
-def send_email(subject, content, recipients=None):
+def send_email(subject, content, recipients=None, cc_recipients=None):
     """发送邮件 via SMTP (curl)"""
     config = load_config()
     if not config:
@@ -99,10 +103,15 @@ def send_email(subject, content, recipients=None):
     
     if not recipients:
         recipients = config.get("to", [])
+    if not cc_recipients:
+        cc_recipients = config.get("cc", [])
     
     mail_lines = [f"From: {config['from']}"]
     for r in recipients:
         mail_lines.append(f"To: {r}")
+    if cc_recipients:
+        for c in cc_recipients:
+            mail_lines.append(f"Cc: {c}")
     mail_lines.append(f"Subject: {subject}")
     mail_lines.append("Content-Type: text/plain; charset=UTF-8")
     mail_lines.append("MIME-Version: 1.0")
@@ -128,6 +137,8 @@ def send_email(subject, content, recipients=None):
     
     for r in recipients:
         cmd.extend(["--mail-rcpt", r])
+    for c in cc_recipients:
+        cmd.extend(["--mail-rcpt", c])
     
     cmd.extend([
         "--upload-file", mail_file,
@@ -293,16 +304,17 @@ if __name__ == "__main__":
     
     config = load_config()
     recipients = config.get("to", []) if config else []
+    cc_recipients = config.get("cc", []) if config else []
     
     if mode == "send":
         # send 模式：
         # - 如果有内容（文件或参数），直接发送
         # - 否则从草稿箱发送
         if content:
-            success = send_email(subject, content, recipients)
+            success = send_email(subject, content, recipients, cc_recipients)
         else:
             success = send_from_draft(subject if subject else None)
     else:
-        success = save_draft(subject, content, recipients)
+        success = save_draft(subject, content, recipients, cc_recipients)
     
     sys.exit(0 if success else 1)
